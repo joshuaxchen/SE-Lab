@@ -155,7 +155,7 @@ cache_line_t *select_line(cache_t *cache, uword_t addr)
     unsigned int S = (unsigned int) pow(2, cache->s);
     uword_t address = addr >> cache->b;
     uword_t index = address % S;
-    cache_line_t *line = &(cache->sets[index]);
+    cache_line_t *line = &(cache->sets[index].lines[0]);
 
     for (unsigned int j = 0; j < cache->E; j++) {
         if (!cache->sets[index].lines[j].valid) {
@@ -182,6 +182,7 @@ bool check_hit(cache_t *cache, uword_t addr, operation_t operation)
     if (line != NULL) {
         hit_count++;
         LRU_count++;
+        line->lru = LRU_count;
         if (operation == WRITE) {
             line->dirty = true;
         }
