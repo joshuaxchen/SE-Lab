@@ -35,7 +35,7 @@ int dirty_eviction_count = 0;
 int clean_eviction_count = 0;
 
 /* TODO: add more globals, structs, macros if necessary */
-
+int LRU_count = 0;
 /*
  * Initialize the cache according to specified arguments
  * Called by cache-runner so do not modify the function signature
@@ -118,6 +118,7 @@ void free_cache(cache_t *cache)
     free(cache);
 }
 
+
 /* TODO:
  * Get the line for address contained in the cache
  * On hit, return the cache line holding the address
@@ -126,6 +127,19 @@ void free_cache(cache_t *cache)
 cache_line_t *get_line(cache_t *cache, uword_t addr)
 {
     /* your implementation */
+    unsigned int S = (unsigned int) pow(2, cache->s);
+    uword_t address = addr >> cache->b;
+    uword_t index = address % S;
+    uword_t tag = addr >> (cache->b + cache->s);
+    // calculate block address and set index in slides
+    // instead of j, use set index
+    // if find then increment, also increment lru, set cache lru to lru count
+    for (unsigned int j = 0; j < cache->E; j++) {
+        if (cache->sets[index].lines[j].tag == tag && cache->sets[index].lines[j].valid) {
+            return &(cache->sets[index].lines[j]);
+        }
+    }
+    
     return NULL;
 }
 
@@ -136,7 +150,22 @@ cache_line_t *get_line(cache_t *cache, uword_t addr)
 cache_line_t *select_line(cache_t *cache, uword_t addr)
 {
     /* your implementation */
-    return NULL;
+    // loop through. find smth in cache that isnt valid
+    // or smallest lru
+    unsigned int S = (unsigned int) pow(2, cache->s);
+    uword_t address = addr >> cache->b;
+    uword_t index = address % S;
+    cache_line_t *line = &(cache->sets[index]);
+
+    for (unsigned int j = 0; j < cache->E; j++) {
+        if (!cache->sets[index].lines[j].valid) {
+            return &(cache->sets[index].lines[j]);
+        }
+        if (cache->sets[index].lines[j].lru < line->lru) {
+            line = &(cache->sets[index].lines[j]);
+        }
+    }
+    return line;
 }
 
 /* TODO:
@@ -145,8 +174,22 @@ cache_line_t *select_line(cache_t *cache, uword_t addr)
  */
 bool check_hit(cache_t *cache, uword_t addr, operation_t operation)
 {
+    // if hit and write, set dirty to true
+    // calls get line
     /* your implementation */
-    return false;
+    cache_line_t *line = get_line(cache, addr);
+
+    if (line != NULL) {
+        hit_count++;
+        LRU_count++;
+        if (operation == WRITE) {
+            line->dirty = true;
+        }
+        return true;
+    } else {
+        miss_count++;
+        return false;
+    }
 }
 
 /* TODO:
@@ -159,6 +202,29 @@ evicted_line_t *handle_miss(cache_t *cache, uword_t addr, operation_t operation,
     evicted_line_t *evicted_line = malloc(sizeof(evicted_line_t));
     evicted_line->data = (byte_t *) calloc(B, sizeof(byte_t));
     /* your implementation */
+    cache_line_t *line = select_line(cache, addr);
+    if (line->valid) {
+        evicted_line->data = line->data;
+        evicted_line->addr = addr;
+        evicted_line->dirty = line->dirty;
+        evicted_line->valid = line->valid;
+        if (evicted_line->dirty) {
+            dirty_eviction_count++;
+        } else {
+            clean_eviction_count++;
+        }
+    }
+        
+    line->data = incoming_data;
+    if (operation == READ) {
+        line->dirty = false;
+    } else {
+        line->dirty = true;
+    }
+    line->tag = addr >> (cache->b + cache->s);
+    line->valid = true;
+    LRU_count++;
+    line->lru = LRU_count;
     return evicted_line;
 }
 
