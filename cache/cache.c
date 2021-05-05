@@ -205,8 +205,15 @@ evicted_line_t *handle_miss(cache_t *cache, uword_t addr, operation_t operation,
     /* your implementation */
     cache_line_t *line = select_line(cache, addr);
     if (line->valid) {
-        evicted_line->data = line->data;
-        evicted_line->addr = addr;
+        if (line->data == NULL) {
+            evicted_line->data = line->data;
+        } else {
+            memcpy(evicted_line->data, line->data, B);
+        }
+        unsigned int S = (unsigned int) pow(2, cache->s);
+        uword_t address = addr >> cache->b;
+        uword_t index = address % S;
+        evicted_line->addr = (line->tag << (cache->b + cache->s)) | (index << (cache->b));
         evicted_line->dirty = line->dirty;
         evicted_line->valid = line->valid;
         if (evicted_line->dirty) {
@@ -215,8 +222,11 @@ evicted_line_t *handle_miss(cache_t *cache, uword_t addr, operation_t operation,
             clean_eviction_count++;
         }
     }
-        
-    line->data = incoming_data;
+    if (incoming_data == NULL) {
+        line->data = incoming_data;
+    } else {
+        memcpy(line->data, incoming_data, B);
+    }
     if (operation == READ) {
         line->dirty = false;
     } else {
@@ -236,6 +246,10 @@ evicted_line_t *handle_miss(cache_t *cache, uword_t addr, operation_t operation,
 void get_byte_cache(cache_t *cache, uword_t addr, byte_t *dest)
 {
     /* your implementation */
+    cache_line_t *temp = get_line(cache, addr);
+    size_t B = (size_t)pow(2, cache->b);
+    byte_t offset = addr % B;
+    dest = temp->data + offset;
 }
 
 
@@ -244,8 +258,16 @@ void get_byte_cache(cache_t *cache, uword_t addr, byte_t *dest)
  * Preconditon: pos is contained within the cache.
  */
 void get_word_cache(cache_t *cache, uword_t addr, word_t *dest) {
-
     /* your implementation */
+    cache_line_t *temp = get_line(cache, addr);
+    size_t B = (size_t)pow(2, cache->b);
+    byte_t offset = addr % B;
+    word_t val = 0;
+    for (int i = 0; i < 8; i++) {
+        word_t b = temp->data[offset+i] & 0xFF;
+        val = val | (b <<(8*i));
+    }
+    *dest = val;
 }
 
 
@@ -255,8 +277,11 @@ void get_word_cache(cache_t *cache, uword_t addr, word_t *dest) {
  */
 void set_byte_cache(cache_t *cache, uword_t addr, byte_t val)
 {
-
     /* your implementation */
+    cache_line_t *temp = get_line(cache, addr);
+    size_t B = (size_t)pow(2, cache->b);
+    byte_t offset = addr % B;
+    temp->data[offset] = val;
 }
 
 
@@ -267,6 +292,13 @@ void set_byte_cache(cache_t *cache, uword_t addr, byte_t val)
 void set_word_cache(cache_t *cache, uword_t addr, word_t val)
 {
     /* your implementation */
+    cache_line_t *temp = get_line(cache, addr);
+    size_t B = (size_t)pow(2, cache->b);
+    byte_t offset = addr % B;
+    for (int i = 0; i < 8; i++) {
+        temp->data[offset+i] = (byte_t)val & 0xFF;
+        val >>= 8;
+    }
 }
 
 /*

@@ -24,7 +24,7 @@ char simname[] = "Y86-64 Processor: PIPE";
 char *object_filename;   /* The input object file name. */
 FILE *object_file;       /* Input file handle */
 int verbosity = 2;    /* Verbosity level [Non interactive Mode only] (-v) */
-word_t instr_limit = 15; /* Instruction limit [Non interactive Mode only] (-l) */
+word_t instr_limit = 10000; /* Instruction limit [Non interactive Mode only] (-l) */
 
 /* Log file */
 FILE *dumpfile = NULL;
@@ -525,10 +525,8 @@ void do_fetch_stage()
         f_pc = fetch_output->predPC;
     }
     instr_valid = true;
-    imem_error = false;
     byte_t tempB;
     byte_t instr;
-    word_t valC;
     imem_error |= !get_byte_val(mem, f_pc, &instr);
     decode_input->icode = HI4(instr);
     decode_input->ifun = LO4(instr);
@@ -546,9 +544,8 @@ void do_fetch_stage()
                 fetch_input->status = STAT_HLT;
                 decode_input->status = STAT_HLT;
 				decode_input->valp = f_pc + 1;
-                fetch_input->predPC = f_pc + 1;
+                fetch_input->predPC = f_pc;
 				break;
-
 			case HPACK(I_RRMOVQ, F_NONE):
 			case HPACK(I_RRMOVQ, C_LE):
 			case HPACK(I_RRMOVQ, C_L):
@@ -562,7 +559,6 @@ void do_fetch_stage()
 				decode_input->valp = f_pc + 2;
                 fetch_input->predPC = f_pc + 2;
 				break;
-
 			case HPACK(I_IRMOVQ, F_NONE):
 				imem_error |= !get_byte_val(mem, f_pc + 1, &tempB);
 				decode_input->rb = LO4(tempB);
@@ -570,7 +566,6 @@ void do_fetch_stage()
 				decode_input->valp = f_pc + 10;
                 fetch_input->predPC = f_pc + 10;
 				break;
-
 			case HPACK(I_RMMOVQ, F_NONE):
 				imem_error |= !get_byte_val(mem, f_pc + 1, &tempB);
 				decode_input->ra = HI4(tempB);
@@ -579,7 +574,6 @@ void do_fetch_stage()
 				decode_input->valp = f_pc + 10;
                 fetch_input->predPC = f_pc + 10;
 				break;
-
 			case HPACK(I_MRMOVQ, F_NONE):
 				imem_error |= !get_byte_val(mem, f_pc + 1, &tempB);
 				decode_input->ra = HI4(tempB);
@@ -588,7 +582,6 @@ void do_fetch_stage()
 				decode_input->valp = f_pc + 10;
                 fetch_input->predPC = f_pc + 10;
 				break;
-
 			case HPACK(I_ALU, A_ADD):
 			case HPACK(I_ALU, A_SUB):
 			case HPACK(I_ALU, A_AND):
@@ -599,7 +592,6 @@ void do_fetch_stage()
 				decode_input->valp = f_pc + 2;
                 fetch_input->predPC = f_pc + 2;
 				break;
-
 			case HPACK(I_JMP, C_YES):
 			case HPACK(I_JMP, C_LE):
 			case HPACK(I_JMP, C_L):
@@ -607,24 +599,19 @@ void do_fetch_stage()
 			case HPACK(I_JMP, C_NE):
 			case HPACK(I_JMP, C_GE):
 			case HPACK(I_JMP, C_G):
-				imem_error |= !get_word_val(mem, f_pc + 1, &valC);
-                decode_input->valc = valC;
+				imem_error |= !get_word_val(mem, f_pc + 1, &decode_input->valc);
 				decode_input->valp = f_pc + 9;
                 fetch_input->predPC = decode_input->valc;
 				break;
-
 			case HPACK(I_CALL, F_NONE):
-				imem_error |= !get_word_val(mem, f_pc + 1, &valC);
-                decode_input->valc = valC;
+				imem_error |= !get_word_val(mem, f_pc + 1, &decode_input->valc);
 				decode_input->valp = f_pc + 9;
                 fetch_input->predPC = decode_input->valc;
 				break;
-
 			case HPACK(I_RET, F_NONE):
 				decode_input->valp = f_pc + 1;
                 fetch_input->predPC = f_pc + 1;
 				break;
-
 			case HPACK(I_PUSHQ, F_NONE):
 				imem_error |= !get_byte_val(mem, f_pc + 1, &tempB);
 				decode_input->ra = HI4(tempB);
@@ -632,7 +619,6 @@ void do_fetch_stage()
 				decode_input->valp = f_pc + 2;
                 fetch_input->predPC = f_pc + 2;
 				break;
-
 			case HPACK(I_POPQ, F_NONE):
 				imem_error |= !get_byte_val(mem, f_pc + 1, &tempB);
 				decode_input->ra = HI4(tempB);
@@ -640,7 +626,6 @@ void do_fetch_stage()
 				decode_input->valp = f_pc + 2;
                 fetch_input->predPC = f_pc + 2;
 				break;
-
 			default:
 				instr_valid = false;
 				printf("Invalid instruction\n");
@@ -653,15 +638,12 @@ void do_fetch_stage()
         fetch_input->status = STAT_ADR;
         decode_input->status = STAT_ADR;
     }
-
     /* logging function, do not change this */
     if (!imem_error) {
         sim_log("\tFetch: f_pc = 0x%llx, f_instr = %s\n",
             f_pc, iname(HPACK(decode_input->icode, decode_input->ifun)));
     }
 }
-
-
 /*************************** Decode stage ***************************
  * TODO: update [*execute_input]
  * you may find these functions useful:
@@ -680,72 +662,59 @@ void do_decode_stage()
     execute_input->ifun = decode_output->ifun;
     execute_input->valc = decode_output->valc;
     execute_input->status = decode_output->status;
-
 		switch (decode_output->icode) {
 			case I_HALT: break;
-
 			case I_NOP: break;
-
 			case I_RRMOVQ: // aka CMOVQ
 				execute_input->srca = decode_output->ra;
 				execute_input->deste = decode_output->rb;
 				break;
-
 			case I_IRMOVQ:
 				execute_input->deste = decode_output->rb;
 				break;
-
 			case I_RMMOVQ:
 				execute_input->srca = decode_output->ra;
 				execute_input->srcb = decode_output->rb;
 				break;
-
 			case I_MRMOVQ:
 				execute_input->srcb = decode_output->rb;
 				execute_input->destm = decode_output->ra;
 				break;
-
 			case I_ALU:
 				execute_input->srca = decode_output->ra;
 				execute_input->srcb = decode_output->rb;
 				execute_input->deste = decode_output->rb;
 				break;
-
 			case I_JMP: break;
-
 			case I_CALL:
 				execute_input->srcb = REG_RSP;
 				execute_input->deste = REG_RSP;
 				break;
-
 			case I_RET:
 				execute_input->srca = REG_RSP;
 				execute_input->srcb = REG_RSP;
 				execute_input->deste = REG_RSP;
 				break;
-
 			case I_PUSHQ:
 				execute_input->srca = decode_output->ra;
 				execute_input->srcb = REG_RSP;
 				execute_input->deste = REG_RSP;
 				break;
-
 			case I_POPQ:
 				execute_input->srca = REG_RSP;
 				execute_input->srcb = REG_RSP;
 				execute_input->deste = REG_RSP;
 				execute_input->destm = decode_output->ra;
 				break;
-
 			default:
 				printf("icode is not valid (%d)", execute_input->icode);
 				break;
 		}
         if (decode_output->icode == I_JMP || decode_output->icode == I_CALL) {
             execute_input->vala = decode_output->valp;
-        } else if (execute_input->srca == execute_output->deste) {
+        } else if (execute_input->srca == memory_input->deste) {
             execute_input->vala = memory_input->vale;
-        } else if (execute_input->srca == writeback_input->destm) {
+        } else if (execute_input->srca == memory_output->destm) {
             execute_input->vala = writeback_input->valm;
         } else if (execute_input->srca == memory_output->deste) {
             execute_input->vala = memory_output->vale;
@@ -757,9 +726,9 @@ void do_decode_stage()
             execute_input->vala = get_reg_val(reg, execute_input->srca);
         }
 		
-        if (execute_input->srcb == execute_output->deste) {
+        if (execute_input->srcb == memory_input->deste) {
             execute_input->valb = memory_input->vale;
-        } else if (execute_input->srcb == writeback_input->destm) {
+        } else if (execute_input->srcb == memory_output->destm) {
             execute_input->valb = writeback_input->valm;
         } else if (execute_input->srcb == memory_output->deste) {
             execute_input->valb = memory_output->vale;
@@ -770,9 +739,7 @@ void do_decode_stage()
         } else {
             execute_input->valb = get_reg_val(reg, execute_input->srcb);
         }
-
 }
-
 /************************** Execute stage **************************
  * TODO: update [*memory_input, cc_in]
  * you may find these functions useful:
@@ -787,7 +754,6 @@ void do_execute_stage()
     alu_t alufun = A_NONE;
     word_t alua, alub;
     alua = alub = 0;
-
     /* your implementation */
     memory_input->icode = execute_output->icode;
     memory_input->ifun = execute_output->ifun;
@@ -797,66 +763,55 @@ void do_execute_stage()
     memory_input->destm = execute_output->destm;
     memory_input->status = execute_output->status;
     memory_input->vale = 0;
-		bool cnd = false;
-
-		switch (execute_output->icode) {
-			case I_HALT: break;
-
-			case I_NOP: break;
-
-			case I_RRMOVQ: // aka CMOVQ
-				cnd = cond_holds(cc, execute_output->ifun);
-				memory_input->vale = execute_output->vala;
-				if (!cnd) {
-					memory_input->deste = REG_NONE;
-				}
-				break;
-
-			case I_IRMOVQ:
-				memory_input->vale = execute_output->valc;
-				break;
-
-			case I_RMMOVQ:
-				memory_input->vale = execute_output->valb + execute_output->valc;
-				break;
-
-			case I_MRMOVQ:
-				memory_input->vale = execute_output->valb + execute_output->valc;
-				break;
-
-			case I_ALU:
-				memory_input->vale = compute_alu(execute_output->ifun, execute_output->vala, execute_output->valb);
-				cc_in = compute_cc(execute_output->ifun, execute_output->vala, execute_output->valb);
+        bool cnd = false;
+        switch (execute_output->icode) {
+            case I_HALT: break;
+            case I_NOP: break;
+            case I_RRMOVQ: // aka CMOVQ
+                cnd = cond_holds(cc, execute_output->ifun);
+                memory_input->vale = execute_output->vala;
+                if (!cnd) {
+                    memory_input->deste = REG_NONE;
+                }
+                break;
+            case I_IRMOVQ:
+                memory_input->vale = execute_output->valc;
+                break;
+            case I_RMMOVQ:
+                memory_input->vale = execute_output->valb + execute_output->valc;
+                break;
+            case I_MRMOVQ:
+                memory_input->vale = execute_output->valb + execute_output->valc;
+                break;
+            case I_ALU:
+                memory_input->vale = compute_alu(execute_output->ifun, execute_output->vala, execute_output->valb);
+                cc_in = compute_cc(execute_output->ifun, execute_output->vala, execute_output->valb);
                 setcc = true;
-				break;
-
-			case I_JMP:
-				cnd = cond_holds(cc, execute_output->ifun);
+                if (execute_output->status == STAT_INS || execute_output->status == STAT_ADR || writeback_output->status == STAT_ADR || writeback_output->status == STAT_INS) {
+                    setcc = false;
+                } 
+                break;
+            case I_JMP:
+                cnd = cond_holds(cc, execute_output->ifun);
                 memory_input->takebranch = cnd;
                 memory_input->vale = execute_output->valc;
-				break;
-
-			case I_CALL:
-				memory_input->vale = execute_output->valb - 8;
-				break;
-
-			case I_RET:
-				memory_input->vale = execute_output->valb + 8;
-				break;
-
-			case I_PUSHQ:
-				memory_input->vale = execute_output->valb - 8;
-				break;
-
-			case I_POPQ:
-				memory_input->vale = execute_output->valb + 8;
-				break;
-
-			default:
-				printf("icode is not valid (%d)", execute_output->icode);
-				break;
-		}
-
+                break;
+            case I_CALL:
+                memory_input->vale = execute_output->valb - 8;
+                break;
+            case I_RET:
+                memory_input->vale = execute_output->valb + 8;
+                break;
+            case I_PUSHQ:
+                memory_input->vale = execute_output->valb - 8;
+                break;
+            case I_POPQ:
+                memory_input->vale = execute_output->valb + 8;
+                break;
+            default:
+                printf("icode is not valid (%d)", execute_output->icode);
+                break;
+        }
     /* logging functions, do not change these */
     if (execute_output->icode == I_JMP) {
         sim_log("\tExecute: instr = %s, cc = %s, branch %staken\n",
@@ -871,7 +826,6 @@ void do_execute_stage()
 	    sim_log("\tExecute: New cc=%s\n", cc_name(cc_in));
     }
 }
-
 /*************************** Memory stage **************************
  * TODO: update [*writeback_input, mem_addr, mem_data, mem_write]
  * you may find these functions useful:
@@ -885,7 +839,6 @@ void do_memory_stage()
     mem_write  = false;
     mem_read   = false;
     dmem_error = false;
-
     /* your implementation */
     writeback_input->icode = memory_output->icode;
     writeback_input->ifun = memory_output->ifun;
@@ -894,64 +847,46 @@ void do_memory_stage()
     writeback_input->destm = memory_output->destm;
     writeback_input->status = memory_output->status;
     writeback_input->valm = 0;
-    mem_write = false;
-    mem_addr = 0;
-    mem_data = 0;
-
+    
 		switch (memory_output->icode) {
 			case I_HALT: break;
-
 			case I_NOP: break;
-
 			case I_RRMOVQ: break; // aka CMOVQ
-
 			case I_IRMOVQ: break;
-
 			case I_RMMOVQ:
 				mem_write = true;
 				mem_addr = memory_output->vale;
 				mem_data = memory_output->vala;
 				break;
-
 			case I_MRMOVQ:
                 mem_read = true;
 				dmem_error |= !get_word_val(mem, memory_output->vale, &writeback_input->valm);
 				break;
-
 			case I_ALU: break;
-
 			case I_JMP: break;
-
 			case I_CALL:
 				mem_write = true;
 				mem_addr = memory_output->vale;
 				mem_data = memory_output->vala;
 				break;
-
 			case I_RET:
                 // idk about mem_read
                 mem_read = true;
 				dmem_error |= !get_word_val(mem, memory_output->vala, &writeback_input->valm);
 				break;
-
 			case I_PUSHQ:
 				mem_write = true;
 				mem_addr = memory_output->vale;
 				mem_data = memory_output->vala;
 				break;
-
 			case I_POPQ:
                 mem_read = true;
 				dmem_error |= !get_word_val(mem, memory_output->vala, &writeback_input->valm);
 				break;
-
 			default:
 				printf("icode is not valid (%d)", memory_output->icode);
 				break;
 		}
-    if (dmem_error) {
-        writeback_input->status = STAT_ADR;
-    }
 
     if (mem_read) {
         if ((dmem_error |= !get_word_val(mem, mem_addr, &mem_data))) {
@@ -961,7 +896,6 @@ void do_memory_stage()
                 mem_data, mem_addr);
         }
     }
-
     if (mem_write) {
         if ((dmem_error |= !set_word_val(mem, mem_addr, mem_data))) {
             sim_log("\tMemory: Couldn't write to address 0x%llx\n", mem_addr);
@@ -969,8 +903,10 @@ void do_memory_stage()
             sim_log("\tMemory: Wrote 0x%llx to address 0x%llx\n", mem_data, mem_addr);
         }
     }
+    if (dmem_error) {
+        writeback_input->status = STAT_ADR;
+    }
 }
-
 /******************** Writeback stage *********************
  * TODO: update [wb_destE, wb_valE, wb_destM, wb_valM, status]
  *******************************************************************/
@@ -981,18 +917,12 @@ void do_writeback_stage()
     wb_valE  = 0;
     wb_destM = REG_NONE;
     wb_valM  = 0;
-
     /* your implementation */
     wb_destE = writeback_output->deste;
     wb_valE  = writeback_output->vale;
-    
     wb_destM = writeback_output->destm;
     wb_valM  = writeback_output->valm;
-    // not sure about changing bub to aok
-    if (writeback_output->status == STAT_BUB) {
-        writeback_output->status = STAT_AOK;
-    }
-
+    
     status = writeback_output->status;
     if (wb_destE != REG_NONE &&  writeback_output -> status == STAT_AOK) {
 	    sim_log("\tWriteback: Wrote 0x%llx to register %s\n",
@@ -1004,9 +934,7 @@ void do_writeback_stage()
 		    wb_valM, reg_name(wb_destM));
 	    set_reg_val(reg, wb_destM, wb_valM);
     }
-
 }
-
 /* given stall and bubble flag, return the correct control operation */
 p_stat_t pipe_cntl(char *name, word_t stall, word_t bubble)
 {
@@ -1015,13 +943,13 @@ p_stat_t pipe_cntl(char *name, word_t stall, word_t bubble)
             sim_log("%s: Conflicting control signals for pipe register\n",
                 name);
             return P_ERROR;
-        } else
+        } else {
             return P_STALL;
+        }
     } else {
 	    return bubble ? P_BUBBLE : P_LOAD;
     }
 }
-
 /******************** Pipeline Register Control ********************
  * TODO: implement stalling or insert a bubble for different stages
  * by modifying the control operations of the pipeline registers
@@ -1040,51 +968,26 @@ void do_stall_check()
     memory_state->op    = pipe_cntl("MEM", false, false);
     writeback_state->op = pipe_cntl("WB", false, false);
     // stalling, bubbling
-    bool ret = false;
-    bool hazard = false;
-    bool branch = false;
     if (decode_output->icode == I_RET || execute_output->icode == I_RET || memory_output->icode == I_RET) {
-        ret = true;
-    }
-    if ((execute_output->icode == I_MRMOVQ || execute_output->icode == I_POPQ) && (execute_output->destm == execute_input->srca || execute_output->destm == execute_input->srcb)) {
-        hazard = true;
-    }
-    if (execute_output->icode == I_JMP && !(memory_output->takebranch)) {
-        branch = true;
-    }
-    // if (ret && branch) {
-    //     fetch_state->op     = pipe_cntl("PC", true, false);
-    //     decode_state->op    = pipe_cntl("ID", false, true);
-    //     execute_state->op   = pipe_cntl("EX", false, true);
-    //     memory_state->op    = pipe_cntl("MEM", false, false);
-    //     writeback_state->op = pipe_cntl("WB", false, false);
-    // } else if (ret && hazard) {
-    //     fetch_state->op     = pipe_cntl("PC", true, false);
-    //     decode_state->op    = pipe_cntl("ID", true, false);
-    //     execute_state->op   = pipe_cntl("EX", false, true);
-    //     memory_state->op    = pipe_cntl("MEM", false, false);
-    //     writeback_state->op = pipe_cntl("WB", false, false);
-    // } else 
-    if (ret) {
         fetch_state->op     = pipe_cntl("PC", true, false);
         decode_state->op    = pipe_cntl("ID", false, true);
-        execute_state->op   = pipe_cntl("EX", false, false);
-        memory_state->op    = pipe_cntl("MEM", false, false);
-        writeback_state->op = pipe_cntl("WB", false, false);
+        // execute_state->op   = pipe_cntl("EX", false, false);
+        // memory_state->op    = pipe_cntl("MEM", false, false);
+        // writeback_state->op = pipe_cntl("WB", false, false);
     }
-     if (hazard) {
+    if ((execute_output->icode == I_MRMOVQ || execute_output->icode == I_POPQ) && (execute_output->destm == execute_input->srca || execute_output->destm == execute_input->srcb)) {
         fetch_state->op     = pipe_cntl("PC", true, false);
         decode_state->op    = pipe_cntl("ID", true, false);
         execute_state->op   = pipe_cntl("EX", false, true);
-        memory_state->op    = pipe_cntl("MEM", false, false);
-        writeback_state->op = pipe_cntl("WB", false, false);
-    } 
-    if (branch) {
-        fetch_state->op     = pipe_cntl("PC", false, false);
+        // memory_state->op    = pipe_cntl("MEM", false, false);
+        // writeback_state->op = pipe_cntl("WB", false, false);
+    }
+    if (execute_output->icode == I_JMP && !memory_input->takebranch) { //out to in and fetch delete
+        //fetch_state->op     = pipe_cntl("PC", false, false);
         decode_state->op    = pipe_cntl("ID", false, true);
         execute_state->op   = pipe_cntl("EX", false, true);
-        memory_state->op    = pipe_cntl("MEM", false, false);
-        writeback_state->op = pipe_cntl("WB", false, false);
+        // memory_state->op    = pipe_cntl("MEM", false, false);
+        // writeback_state->op = pipe_cntl("WB", false, false);
     }
 }
 
@@ -1117,7 +1020,6 @@ word_t sim_run_pipe(word_t max_instr, word_t max_cycle, byte_t *statusp, cc_t *c
 	    *ccp = cc;
     return icount;
 }
-
 
 
 void sim_run_cycle(word_t *icount, word_t* ccount, byte_t *statusp, cc_t *ccp)
