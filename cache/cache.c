@@ -204,6 +204,7 @@ evicted_line_t *handle_miss(cache_t *cache, uword_t addr, operation_t operation,
     evicted_line->data = (byte_t *) calloc(B, sizeof(byte_t));
     /* your implementation */
     cache_line_t *line = select_line(cache, addr);
+    evicted_line->valid = false;
     if (line->valid) {
         if (line->data == NULL) {
             evicted_line->data = line->data;

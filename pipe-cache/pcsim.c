@@ -18,7 +18,6 @@
 #include "pipeline.h"
 #include "stages.h"
 #include "sim.h"
-#include "math.h"
 
 cache_t* cache;
 
@@ -1053,8 +1052,6 @@ word_t sim_run_pipe(word_t max_instr, word_t max_cycle, byte_t *statusp, cc_t *c
     word_t icount = 0;
     word_t ccount = 0;
     byte_t run_status = STAT_AOK;
-    byte_t addr[20];
-    memcpy(&addr, mem->contents, 20);
     while (icount < max_instr && ccount < max_cycle) {
         run_status = sim_step_pipe(ccount);
         if (run_status != STAT_BUB)
@@ -1062,17 +1059,6 @@ word_t sim_run_pipe(word_t max_instr, word_t max_cycle, byte_t *statusp, cc_t *c
         if (run_status != STAT_AOK && run_status != STAT_BUB)
             break;
         ccount++;
-    }
-    memcpy(mem->contents, &addr, 20);
-    unsigned int S = (unsigned int) pow(2, cache->s);
-    size_t B = (size_t)pow(2, cache->b);
-    for (unsigned int i = 0; i < S; i++){
-        for (unsigned int j = 0; j < cache->E; j++) {
-            if(cache->sets[i].lines[j].dirty && cache->sets[i].lines[j].valid){
-                uword_t addr = (cache->sets[i].lines[j].tag<<(cache->b + cache->s)) + (i<<cache->b);
-                memcpy(mem->contents + addr, cache->sets[i].lines[j].data, B);
-            }
-        }
     }
     if (statusp)
         *statusp = run_status;
