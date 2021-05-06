@@ -1,44 +1,19 @@
-	.pos 0
-init:
-        #Set up stack pointer
-        irmovq stack, %rsp
-        call main
-        halt
-
-        .align 8
-
-array:
-        .quad 0x00000000000020
-        .quad 0x00000000000020
-        .quad 0x00000000000020
-        .quad 0x00000000000040
-        .quad 0x00000000000000
-        .quad 0x00000000000020
-        .quad 0x00000000000020
-        .quad 0x00000000000020
-
-main:
-        irmovq array, %rdi
-        call max
-        ret
-
-max:
-        irmovq $8, %r9
-        irmovq $0, %rax
-        mrmovq (%rdi), %rax     # get first array val
-
-loop:
-        addq %r9, %rdi
-        mrmovq (%rdi), %rdx
-	mrmovq (%rdi), %rcx
-        andq %rdx, %rdx
-        je done
-        subq %rax, %rdx
-        cmovg %rcx, %rax
-        jmp loop
-
-done:
-        ret
-
-        .pos 0x100
-stack:
+# Demonstrate branch cancellation, forwarding priority, 
+# and invalid instruction address
+   irmovq 2,%rdi 
+   irmovq 3,%rsi 
+   jne  target         # Should not take and fall to jmp main
+   jmp  main           # jmp main
+   irmovq $1, %rax     # Does not reach
+   halt
+target:
+   irmovq $10, %rdx    # Does not reach target
+   irmovq $11, %rbx
+   halt
+main:                  
+   irmovq $12, %rdx    # Forwarding priority within decode stage
+   irmovq  $5, %rdx
+   rrmovq %rdx, %rax
+   rmmovq %rax, %rdi
+   jmp  wrong          # Tests invalid instruction address in memory stage
+   halt
